@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Newtonsoft.Json;
 using LangChain.Providers;
 using LangChain.Schema;
 
@@ -32,8 +32,8 @@ public abstract class BaseMessagePromptTemplate
             Type = this.GetType().Name,
             // You need to serialize 'this' to a JSON string, then deserialize it back to a dictionary
             // to mimic the JavaScript `JSON.parse(JSON.stringify(this))` behavior.
-            AdditionalProperties = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                JsonSerializer.Serialize(this)) ?? new Dictionary<string, object>(),
+            AdditionalProperties = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+                JsonConvert.SerializeObject(this)) ?? new Dictionary<string, object>(),
         };
         return serialized;
     }

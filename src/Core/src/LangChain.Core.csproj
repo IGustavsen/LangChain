@@ -26,6 +26,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Providers\Abstractions\src\LangChain.Providers.Abstractions.csproj" />
     <ProjectReference Include="..\..\Sources\Abstractions\src\LangChain.Sources.Abstractions.csproj" />
     <ProjectReference Include="..\..\Splitters\Abstractions\src\LangChain.Splitters.Abstractions.csproj" />

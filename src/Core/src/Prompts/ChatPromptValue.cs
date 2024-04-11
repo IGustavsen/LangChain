@@ -1,23 +1,26 @@
-using System.Text.Json;
+using Newtonsoft.Json;
 using LangChain.Providers;
 using LangChain.Schema;
 
 namespace LangChain.Prompts;
 
 /// <inheritdoc/>
-public class ChatPromptValue(
-    IReadOnlyCollection<Message> messages)
-    : BasePromptValue
+public class ChatPromptValue : BasePromptValue
 {
     /// <summary>
     /// 
     /// </summary>
-    public IReadOnlyCollection<Message> Messages { get; set; } = messages;
+    public IReadOnlyCollection<Message> Messages { get; set; }
+
+    public ChatPromptValue(IReadOnlyCollection<Message> messages)
+    {
+        Messages = messages;
+    }
 
     /// <inheritdoc/>
     public override string ToString()
     {
-        return JsonSerializer.Serialize(this.Messages);
+        return JsonConvert.SerializeObject(this.Messages);
     }
 
     /// <inheritdoc/>

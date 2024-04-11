@@ -1,172 +1,89 @@
+using System;
+using System.Collections.Generic;
 using System.Dynamic;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
-namespace LangChain.Common.Converters;
-
-/// <inheritdoc />
-/// According: https://stackoverflow.com/questions/65972825/c-sharp-deserializing-nested-json-to-nested-dictionarystring-object
-public sealed class ObjectAsPrimitiveConverter : JsonConverter<object>
+namespace LangChain.Common.Converters
 {
-    FloatFormat FloatFormat { get; init; }
-    UnknownNumberFormat UnknownNumberFormat { get; init; }
-    ObjectFormat ObjectFormat { get; init; }
-
-    /// <inheritdoc />
-    public ObjectAsPrimitiveConverter() : this(FloatFormat.Double, UnknownNumberFormat.Error, ObjectFormat.Expando) { }
-
-    /// <inheritdoc />
-    public ObjectAsPrimitiveConverter(FloatFormat floatFormat, UnknownNumberFormat unknownNumberFormat, ObjectFormat objectFormat)
+    public sealed class ObjectAsPrimitiveConverter : JsonConverter
     {
-        FloatFormat = floatFormat;
-        UnknownNumberFormat = unknownNumberFormat;
-        ObjectFormat = objectFormat;
-    }
+        FloatFormat FloatFormat { get; }
+        UnknownNumberFormat UnknownNumberFormat { get; }
+        ObjectFormat ObjectFormat { get; }
 
-    /// <inheritdoc />
-    public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
-    {
-        if (value == null)
+        public ObjectAsPrimitiveConverter() : this(FloatFormat.Double, UnknownNumberFormat.Error, ObjectFormat.Expando) { }
+
+        public ObjectAsPrimitiveConverter(FloatFormat floatFormat, UnknownNumberFormat unknownNumberFormat, ObjectFormat objectFormat)
         {
-            throw new ArgumentNullException(nameof(value));
+            FloatFormat = floatFormat;
+            UnknownNumberFormat = unknownNumberFormat;
+            ObjectFormat = objectFormat;
         }
 
-        if (writer == null)
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            throw new ArgumentNullException(nameof(writer));
+            if (value == null)
+            {
+                writer.WriteNull();
+            }
+            else
+            {
+                JToken t = JToken.FromObject(value);
+                t.WriteTo(writer);
+            }
         }
 
-        if (value.GetType() == typeof(object))
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            writer.WriteStartObject();
-            writer.WriteEndObject();
+            JToken token = JToken.Load(reader);
+            return ConvertTokenToObject(token);
         }
-        else
+
+        private object ConvertTokenToObject(JToken token)
         {
-            JsonSerializer.Serialize(writer, value, value.GetType(), options);
+            switch (token.Type)
+            {
+                case JTokenType.Object:
+                    return token.ToObject<IDictionary<string, object>>();
+                case JTokenType.Array:
+                    return token.ToObject<List<object>>();
+                case JTokenType.Integer:
+                    return token.ToObject<int>();
+                case JTokenType.Float:
+                    return FloatFormat == FloatFormat.Decimal ? token.ToObject<decimal>() : token.ToObject<double>();
+                case JTokenType.String:
+                    return token.ToString();
+                case JTokenType.Boolean:
+                    return token.ToObject<bool>();
+                case JTokenType.Null:
+                    return null;
+                default:
+                    throw new JsonException($"Unexpected token type: {token.Type}");
+            }
         }
-    }
 
-    /// <inheritdoc />
-    public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        switch (reader.TokenType)
+        public override bool CanConvert(Type objectType)
         {
-            case JsonTokenType.Null:
-                return null;
-
-            case JsonTokenType.False:
-                return false;
-
-            case JsonTokenType.True:
-                return true;
-
-            case JsonTokenType.String:
-                return reader.GetString();
-
-            case JsonTokenType.Number:
-                {
-                    if (reader.TryGetInt32(out var i))
-                        return i;
-
-                    if (reader.TryGetInt64(out var l))
-                        return l;
-
-                    switch (FloatFormat)
-                    {
-                        // BigInteger could be added here.
-                        case FloatFormat.Decimal when reader.TryGetDecimal(out var m):
-                            return m;
-                        case FloatFormat.Double when reader.TryGetDouble(out var d):
-                            return d;
-                    }
-
-                    using var doc = JsonDocument.ParseValue(ref reader);
-                    if (UnknownNumberFormat == UnknownNumberFormat.JsonElement)
-                    {
-                        return doc.RootElement.Clone();
-                    }
-
-                    throw new JsonException($"Cannot parse number {doc.RootElement}");
-                }
-            case JsonTokenType.StartArray:
-                {
-                    var list = new List<object?>();
-                    while (reader.Read())
-                    {
-                        switch (reader.TokenType)
-                        {
-                            case JsonTokenType.EndArray:
-                                return list;
-
-                            default:
-                                list.Add(Read(ref reader, typeof(object), options));
-                                break;
-                        }
-                    }
-                    throw new JsonException();
-                }
-            case JsonTokenType.StartObject:
-                var dict = CreateDictionary();
-                while (reader.Read())
-                {
-                    switch (reader.TokenType)
-                    {
-                        case JsonTokenType.EndObject:
-                            return dict;
-
-                        case JsonTokenType.PropertyName:
-                            var key = reader.GetString() ?? string.Empty;
-                            reader.Read();
-                            dict.Add(key, Read(ref reader, typeof(object), options));
-                            break;
-
-                        default:
-                            throw new JsonException();
-                    }
-                }
-                throw new JsonException();
-
-            default:
-                throw new JsonException($"Unknown token {reader.TokenType}");
+            return true; // Can handle all types
         }
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <returns></returns>
-    private IDictionary<string, object?> CreateDictionary() =>
-        ObjectFormat == ObjectFormat.Expando
-            ? new ExpandoObject()
-            : new Dictionary<string, object?>();
-}
+    public enum FloatFormat
+    {
+        Double,
+        Decimal
+    }
 
-/// <summary> </summary>
-public enum FloatFormat
-{
-    /// <summary> </summary>
-    Double,
-    /// <summary> </summary>
-    Decimal
-}
+    public enum UnknownNumberFormat
+    {
+        Error,
+        JsonElement,
+    }
 
-/// <summary>
-/// 
-/// </summary>
-public enum UnknownNumberFormat
-{
-    /// <summary> </summary>
-    Error,
-    /// <summary> </summary>
-    JsonElement,
-}
-
-/// <summary> </summary>
-public enum ObjectFormat
-{
-    /// <summary> </summary>
-    Expando,
-    /// <summary> </summary>
-    Dictionary,
+    public enum ObjectFormat
+    {
+        Expando,
+        Dictionary,
+    }
 }

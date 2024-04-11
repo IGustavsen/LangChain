@@ -263,7 +263,7 @@ public class ConsoleCallbackHandler(ConsoleCallbackHandlerInput fields) : BaseTr
     {
         try
         {
-            return System.Text.Json.JsonSerializer.Serialize(obj);
+            return Newtonsoft.Json.JsonConvert.SerializeObject(obj);
         }
         catch (Exception)
         {

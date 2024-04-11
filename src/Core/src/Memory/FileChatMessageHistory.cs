@@ -1,78 +1,73 @@
 ﻿using LangChain.Providers;
-using System.Text.Json;
+using Newtonsoft.Json;
+using System.IO;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
-namespace LangChain.Memory;
-
-/// <summary>
-/// Chat message history that stores history in a local file.
-/// </summary>
-public class FileChatMessageHistory : BaseChatMessageHistory
+namespace LangChain.Memory
 {
-    private string MessagesFilePath { get; }
-
-    private List<Message> _messages = new List<Message>();
-
-    /// <inheritdoc/>
-    public override IReadOnlyList<Message> Messages => _messages;
-
     /// <summary>
-    /// Initializes new history instance with provided file path
+    /// Chat message history that stores history in a local file.
     /// </summary>
-    /// <param name="messagesFilePath">path of the local file to store the messages</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    private FileChatMessageHistory(string messagesFilePath)
+    public class FileChatMessageHistory : BaseChatMessageHistory
     {
-        MessagesFilePath = messagesFilePath ?? throw new ArgumentNullException(nameof(messagesFilePath));
-    }
+        private string MessagesFilePath { get; }
 
-    /// <summary>
-    /// Create new history instance with provided file path
-    /// </summary>
-    /// <param name="path">path of the local file to store the messages</param>
-    /// <param name="cancellationToken"></param>
-    public static async Task<FileChatMessageHistory> CreateAsync(string path, CancellationToken cancellationToken = default)
-    {
-        FileChatMessageHistory chatHistory = new FileChatMessageHistory(path);
-        await chatHistory.LoadMessages().ConfigureAwait(false);
+        private List<Message> _messages = new List<Message>();
 
-        return chatHistory;
-    }
+        /// <inheritdoc/>
+        public override IReadOnlyList<Message> Messages => _messages;
 
-    /// <inheritdoc/>
-    public override async Task AddMessage(Message message)
-    {
-        _messages.Add(message);
-        await SaveMessages().ConfigureAwait(false);
-    }
-
-    /// <inheritdoc/>
-    public override async Task Clear()
-    {
-        _messages.Clear();
-        await SaveMessages().ConfigureAwait(false);
-    }
-
-    private async Task SaveMessages()
-    {
-        string json = JsonSerializer.Serialize(_messages);
-        await Task.Run(() => File.WriteAllText(MessagesFilePath, json)).ConfigureAwait(false);
-    }
-
-    private Task LoadMessages()
-    {
-        try
+        private FileChatMessageHistory(string messagesFilePath)
         {
-            if (File.Exists(MessagesFilePath))
-            {
-                string json = File.ReadAllText(MessagesFilePath);
-                _messages = JsonSerializer.Deserialize<List<Message>>(json) ?? new List<Message>();
-            }
-            
-            return Task.CompletedTask;
+            MessagesFilePath = messagesFilePath ?? throw new ArgumentNullException(nameof(messagesFilePath));
         }
-        catch (Exception ex)
+
+        public static async Task<FileChatMessageHistory> CreateAsync(string path, CancellationToken cancellationToken = default)
         {
-            return Task.FromException(ex);
+            var chatHistory = new FileChatMessageHistory(path);
+            await chatHistory.LoadMessages().ConfigureAwait(false);
+
+            return chatHistory;
+        }
+
+        /// <inheritdoc/>
+        public override async Task AddMessage(Message message)
+        {
+            _messages.Add(message);
+            await SaveMessages().ConfigureAwait(false);
+        }
+
+        /// <inheritdoc/>
+        public override async Task Clear()
+        {
+            _messages.Clear();
+            await SaveMessages().ConfigureAwait(false);
+        }
+
+        private async Task SaveMessages()
+        {
+            string json = JsonConvert.SerializeObject(_messages);
+            await Task.Run(() => File.WriteAllText(MessagesFilePath, json)).ConfigureAwait(false);
+        }
+
+        private Task LoadMessages()
+        {
+            try
+            {
+                if (File.Exists(MessagesFilePath))
+                {
+                    string json = File.ReadAllText(MessagesFilePath);
+                    _messages = JsonConvert.DeserializeObject<List<Message>>(json) ?? new List<Message>();
+                }
+
+                return Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException(ex);
+            }
         }
     }
 }
